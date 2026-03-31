@@ -1,0 +1,185 @@
+<h2>时序回测类 — 完整设计 (基于 read_me.md)</h2>
+<p class="subtitle">严格遵循 read_me.md 定义的流程</p>
+
+<div class="section">
+  <div class="mockup">
+    <div class="mockup-header">1. 数据输入层 — DataSpec</div>
+    <div class="mockup-body" style="padding: 20px; font-family: monospace; font-size: 13px; line-height: 1.9;">
+      <div style="color: #8be9fd; font-weight: bold; margin-bottom: 8px;">支持格式: h5, csv, parquet</div>
+      <div style="display: flex; gap: 24px;">
+        <div style="flex: 1; background: #44475a; padding: 16px; border-radius: 8px;">
+          <div style="color: #50fa7b; font-weight: bold; margin-bottom: 8px;">路径 A: 有 Label</div>
+          <div style="color: #f8f8f2;">use_raw_data = <span style="color: #ff5555;">False</span></div>
+          <div style="color: #f8f8f2;">输入: feature_df + label_df</div>
+          <div style="color: #f8f8f2;">用户指定: feature列名, label列名, time列名</div>
+          <div style="color: #6272a4; margin-top: 8px;">→ 校验 timestamp 对齐</div>
+          <div style="color: #6272a4;">→ 不对齐则 print 中断</div>
+        </div>
+        <div style="flex: 1; background: #44475a; padding: 16px; border-radius: 8px;">
+          <div style="color: #ffb86c; font-weight: bold; margin-bottom: 8px;">路径 B: 无 Label (原始数据)</div>
+          <div style="color: #f8f8f2;">use_raw_data = <span style="color: #50fa7b;">True</span></div>
+          <div style="color: #f8f8f2;">输入: feature_df + ohlcv_df</div>
+          <div style="color: #f8f8f2;">用户指定: time列名, close/vwap列名</div>
+          <div style="color: #f8f8f2;">exec_price_type: <span style="color: #ff79c6;">"close"</span> | <span style="color: #ff79c6;">"vwap"</span></div>
+          <div style="color: #6272a4; margin-top: 8px;">→ 内部计算 label (一阶差分)</div>
+          <div style="color: #6272a4;">→ 校验 timestamp 对齐</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 20px;">
+  <div class="mockup">
+    <div class="mockup-header">2. Label 定义 — LabelSpec</div>
+    <div class="mockup-body" style="padding: 20px; font-family: monospace; font-size: 13px; line-height: 1.9;">
+      <div style="display: flex; gap: 24px;">
+        <div style="flex: 1; background: #44475a; padding: 16px; border-radius: 8px;">
+          <div style="color: #ff79c6; font-weight: bold;">label_horizon: int = 1</div>
+          <div style="color: #f8f8f2; font-size: 12px; margin-top: 4px;">
+            label=1: 信号发出后下一个bar开仓, 持有1个bar<br>
+            label=2: 持有2个bar, position各0.5叠加<br>
+            label=5: 持有5个bar, 5个0.2仓位叠加<br>
+          </div>
+          <div style="color: #6272a4; margin-top: 8px;">收益率 = Σ(各仓位收益), 每个仓位 = 1/label_horizon</div>
+        </div>
+        <div style="flex: 1; background: #44475a; padding: 16px; border-radius: 8px;">
+          <div style="color: #ff79c6; font-weight: bold;">lag: int = 1</div>
+          <div style="color: #f8f8f2; font-size: 12px; margin-top: 4px;">
+            lag=1: 出信号后下一个bar交易 (默认)<br>
+            lag=2: 出信号后第二个bar交易<br>
+          </div>
+          <div style="color: #6272a4; margin-top: 8px;">exec_price_type 决定成交价:<br>
+            close → 用 close 价成交<br>
+            vwap → 用 vwap 价成交</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 20px;">
+  <div class="mockup">
+    <div class="mockup-header">3. 信号生成 — SignalSpec</div>
+    <div class="mockup-body" style="padding: 20px; font-family: monospace; font-size: 13px; line-height: 1.9;">
+      <div style="display: flex; gap: 16px;">
+        <div style="flex: 1; background: #44475a; padding: 16px; border-radius: 8px;">
+          <div style="color: #50fa7b; font-weight: bold;">方法 A: 分位数法 (默认)</div>
+          <div style="color: #f8f8f2; font-size: 12px;">
+            upper_quantile = 0.8<br>
+            lower_quantile = 0.2<br>
+            rolling_window = 100<br>
+            feature > upper → long<br>
+            feature < lower → short
+          </div>
+        </div>
+        <div style="flex: 1; background: #44475a; padding: 16px; border-radius: 8px;">
+          <div style="color: #ffb86c; font-weight: bold;">方法 B: 阈值法</div>
+          <div style="color: #f8f8f2; font-size: 12px;">
+            upper_threshold: float (绝对数字)<br>
+            lower_threshold: float (绝对数字)<br>
+            feature > upper → long<br>
+            feature < lower → short
+          </div>
+        </div>
+        <div style="flex: 1; background: #44475a; padding: 16px; border-radius: 8px;">
+          <div style="color: #bd93f9; font-weight: bold;">方法 C: 自定义映射</div>
+          <div style="color: #f8f8f2; font-size: 12px;">
+            signal_mapper: Callable = None<br>
+            用户 import 映射函数<br>
+            启用时可选: 换仓 hurdle<br>
+            默认 Equal Weighted
+          </div>
+        </div>
+      </div>
+      <div style="margin-top: 12px; background: #44475a; padding: 12px 16px; border-radius: 8px;">
+        <div style="color: #8be9fd; font-weight: bold;">展示模式选择</div>
+        <div style="color: #f8f8f2; font-size: 12px;">
+          display_mode: "long_only" | "short_only" | "long_short" | 任意组合 | "all"
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 20px;">
+  <div class="mockup">
+    <div class="mockup-header">4. 执行 & 费率</div>
+    <div class="mockup-body" style="padding: 20px; font-family: monospace; font-size: 13px; line-height: 1.9;">
+      <div style="background: #44475a; padding: 16px; border-radius: 8px;">
+        <div style="color: #f8f8f2;">
+          <span style="color: #ff79c6;">fee_rate</span>: float = 0.00005 <span style="color: #6272a4;"># 万五单边</span><br>
+          <span style="color: #ff79c6;">show_before_fee</span>: bool = True<br>
+          <span style="color: #ff79c6;">show_after_fee</span>: bool = True<br>
+          <span style="color: #ff79c6;">hurdle_enabled</span>: bool = False <span style="color: #6272a4;"># 仅自定义映射时可用</span><br>
+          <span style="color: #ff79c6;">hurdle_func</span>: Callable = None <span style="color: #6272a4;"># 自定义换仓hurdle</span><br>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 20px;">
+  <div class="mockup">
+    <div class="mockup-header">5. 输出 — 表格 + 图表 (数形结合)</div>
+    <div class="mockup-body" style="padding: 20px; font-size: 13px; line-height: 1.9;">
+      <div style="display: flex; gap: 24px;">
+        <div style="flex: 1; background: #44475a; padding: 16px; border-radius: 8px;">
+          <div style="color: #50fa7b; font-weight: bold; margin-bottom: 8px;">表格字段</div>
+          <div style="color: #f8f8f2; font-family: monospace; font-size: 12px;">
+            • Annualized Return<br>
+            • Total Return<br>
+            • Volatility<br>
+            • Sharpe Ratio<br>
+            • Sortino Ratio<br>
+            • Turnover<br>
+            • Max Drawdown<br>
+            • Max Drawdown Recovery Time<br>
+            • Rank IC<br>
+            • IC<br>
+            • IR (Information Ratio)
+          </div>
+        </div>
+        <div style="flex: 1; background: #44475a; padding: 16px; border-radius: 8px;">
+          <div style="color: #ffb86c; font-weight: bold; margin-bottom: 8px;">图表 (英文标注)</div>
+          <div style="color: #f8f8f2; font-family: monospace; font-size: 12px;">
+            • PnL Curve (Before Fee)<br>
+            • PnL Curve (After Fee)<br>
+            • Rank IC Rolling Window<br>
+            • IC Rolling Window<br>
+            <div style="color: #ff5555; margin-top: 8px; font-weight: bold;">
+              ⚠ 禁止使用 pandas rolling 函数<br>
+              ⚠ 必须用 numba 加速实现
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 20px;">
+  <div class="mockup">
+    <div class="mockup-header">6. 关键约束 (Tips)</div>
+    <div class="mockup-body" style="padding: 20px; font-size: 13px;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div style="background: #ff5555; padding: 12px; border-radius: 8px; color: #f8f8f2;">
+          <strong>① timestamp 不对齐 → 中断</strong><br>
+          <span style="font-size: 12px;">print 提示后中断, 不继续</span>
+        </div>
+        <div style="background: #ff5555; padding: 12px; border-radius: 8px; color: #f8f8f2;">
+          <strong>② 不用 rolling 函数</strong><br>
+          <span style="font-size: 12px;">IC 和 分位数 rolling 全部用 numba</span>
+        </div>
+        <div style="background: #ffb86c; padding: 12px; border-radius: 8px; color: #282a36;">
+          <strong>③ 多 label 叠加仓位</strong><br>
+          <span style="font-size: 12px;">label=2 → 2个0.5仓位, label=5 → 5个0.2仓位</span>
+        </div>
+        <div style="background: #ffb86c; padding: 12px; border-radius: 8px; color: #282a36;">
+          <strong>④ 自定义映射 → hurdle 模块</strong><br>
+          <span style="font-size: 12px;">无自定义映射 → 跳过 hurdle</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,91 @@
+<h2>时序回测 API — 架构总览</h2>
+<p class="subtitle">Strategy Pattern with Base Class (Approach B)</p>
+
+<div class="section">
+  <div class="mockup">
+    <div class="mockup-header">Module Structure</div>
+    <div class="mockup-body" style="font-family: monospace; font-size: 14px; line-height: 1.8;">
+      <div style="padding: 16px;">
+        <div style="color: #8be9fd;">backtest_api/</div>
+        <div style="padding-left: 20px;">
+          <div style="color: #f8f8f2;">├── <span style="color: #50fa7b;">base.py</span> — BaseBacktest 抽象基类</div>
+          <div style="color: #f8f8f2;">├── <span style="color: #50fa7b;">config.py</span> — 数据规格 dataclass (DataSpec, LabelSpec, FeatureSpec)</div>
+          <div style="color: #f8f8f2;">├── <span style="color: #50fa7b;">timing/</span></div>
+          <div style="padding-left: 20px;">
+            <div style="color: #f8f8f2;">├── <span style="color: #ff79c6;">backtest.py</span> — TimingBacktest(BaseBacktest)</div>
+            <div style="color: #f8f8f2;">├── <span style="color: #ff79c6;">label.py</span> — Label 计算 (VWAP/Close/自定义)</div>
+            <div style="color: #f8f8f2;">├── <span style="color: #ff79c6;">executor.py</span> — 信号执行 & 成交模拟</div>
+            <div style="color: #f8f8f2;">└── <span style="color: #ff79c6;">evaluator.py</span> — 绩效评估 & 报告</div>
+          </div>
+          <div style="color: #f8f8f2;">├── <span style="color: #6272a4;">cross_sectional/</span> — (Phase 2)</div>
+          <div style="color: #f8f8f2;">├── <span style="color: #6272a4;">hf/</span> — (Phase 3)</div>
+          <div style="color: #f8f8f2;">├── <span style="color: #50fa7b;">metrics.py</span> — 共享指标计算 (Sharpe, MDD, IC...)</div>
+          <div style="color: #f8f8f2;">└── <span style="color: #50fa7b;">report.py</span> — 共享报告生成</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <div class="mockup">
+    <div class="mockup-header">Data Flow Pipeline</div>
+    <div class="mockup-body" style="padding: 24px;">
+      <div style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; font-size: 14px;">
+        <div style="background: #44475a; padding: 12px 16px; border-radius: 8px; text-align: center;">
+          <div style="color: #8be9fd; font-weight: bold;">输入</div>
+          <div style="color: #f8f8f2; font-size: 12px;">Features DataFrame<br>+ Labels / OHLCV</div>
+        </div>
+        <div style="color: #6272a4; font-size: 20px;">→</div>
+        <div style="background: #44475a; padding: 12px 16px; border-radius: 8px; text-align: center;">
+          <div style="color: #ffb86c; font-weight: bold;">Label 计算</div>
+          <div style="color: #f8f8f2; font-size: 12px;">VWAP / Close / 直接输入<br>决定 exec_price 类型</div>
+        </div>
+        <div style="color: #6272a4; font-size: 20px;">→</div>
+        <div style="background: #44475a; padding: 12px 16px; border-radius: 8px; text-align: center;">
+          <div style="color: #ff79c6; font-weight: bold;">信号生成</div>
+          <div style="color: #f8f8f2; font-size: 12px;">Feature → 预测 → Signal<br>buy / sell / flat</div>
+        </div>
+        <div style="color: #6272a4; font-size: 20px;">→</div>
+        <div style="background: #44475a; padding: 12px 16px; border-radius: 8px; text-align: center;">
+          <div style="color: #50fa7b; font-weight: bold;">执行模拟</div>
+          <div style="color: #f8f8f2; font-size: 12px;">按 label 定义成交<br>VWAP→VWAP价, Close→收盘价</div>
+        </div>
+        <div style="color: #6272a4; font-size: 20px;">→</div>
+        <div style="background: #44475a; padding: 12px 16px; border-radius: 8px; text-align: center;">
+          <div style="color: #bd93f9; font-weight: bold;">评估 & 报告</div>
+          <div style="color: #f8f8f2; font-size: 12px;">PnL, Sharpe, IC<br>Trade Analysis, Report</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <div class="mockup">
+    <div class="mockup-header">Class Hierarchy</div>
+    <div class="mockup-body" style="padding: 24px; font-family: monospace; font-size: 13px; line-height: 2;">
+      <div style="text-align: center;">
+        <div style="display: inline-block; background: #44475a; padding: 12px 24px; border-radius: 8px; border: 2px solid #8be9fd;">
+          <span style="color: #8be9fd; font-weight: bold;">BaseBacktest</span><br>
+          <span style="color: #6272a4; font-size: 11px;">load_data() | validate() | run() | evaluate() | report()</span>
+        </div>
+        <div style="color: #6272a4; font-size: 24px;">↓</div>
+        <div style="display: flex; justify-content: center; gap: 24px;">
+          <div style="background: #44475a; padding: 12px 16px; border-radius: 8px; border: 2px solid #ff79c6;">
+            <span style="color: #ff79c6; font-weight: bold;">TimingBacktest</span><br>
+            <span style="color: #f8f8f2; font-size: 11px;">Phase 1 ✓</span>
+          </div>
+          <div style="background: #44475a; padding: 12px 16px; border-radius: 8px; border: 2px dashed #6272a4;">
+            <span style="color: #6272a4; font-weight: bold;">CrossSectionalBacktest</span><br>
+            <span style="color: #6272a4; font-size: 11px;">Phase 2</span>
+          </div>
+          <div style="background: #44475a; padding: 12px 16px; border-radius: 8px; border: 2px dashed #6272a4;">
+            <span style="color: #6272a4; font-weight: bold;">HFBacktest</span><br>
+            <span style="color: #6272a4; font-size: 11px;">Phase 3</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
