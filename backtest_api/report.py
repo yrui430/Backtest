@@ -8,6 +8,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.figure
 
+plt.rcParams["figure.max_open_warning"] = 0  # suppress warning in batch mode
+
 from backtest_api.metrics import (
     annualized_return,
     total_return,
