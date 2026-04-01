@@ -112,8 +112,14 @@ def execute_cross_section_backtest(
     date_col: str,
     price_col: str,
     display_mode: str = "long_short",
+    returns_df: Optional[pd.DataFrame] = None,
 ) -> dict:
     """Execute the cross-section backtest: signal -> weight -> portfolio PnL.
+
+    Args:
+        returns_df: If provided, use pre-computed returns instead of computing
+            from price_df. Must have columns [stock_col, date_col, '_return'].
+            Used in label mode where labels are the returns.
 
     Returns dict with:
       - portfolio_gross_pnl: pd.Series (per bar)
@@ -125,18 +131,25 @@ def execute_cross_section_backtest(
     """
     lag = label_spec.lag
 
-    merged = signal_df[[stock_col, date_col, "signal"]].merge(
-        price_df[[stock_col, date_col, price_col]],
-        on=[stock_col, date_col],
-        how="inner",
-    )
+    if returns_df is not None:
+        # Label mode: use pre-computed returns
+        merged = signal_df[[stock_col, date_col, "signal"]].merge(
+            returns_df[[stock_col, date_col, "_return"]],
+            on=[stock_col, date_col],
+            how="inner",
+        )
+    else:
+        # Raw mode: compute returns from prices
+        merged = signal_df[[stock_col, date_col, "signal"]].merge(
+            price_df[[stock_col, date_col, price_col]],
+            on=[stock_col, date_col],
+            how="inner",
+        )
+        merged = merged.sort_values([stock_col, date_col])
+        merged["_return"] = merged.groupby(stock_col)[price_col].pct_change()
 
     dates = sorted(merged[date_col].unique())
     n_dates = len(dates)
-
-    # Compute per-stock bar returns
-    merged = merged.sort_values([stock_col, date_col])
-    merged["_return"] = merged.groupby(stock_col)[price_col].pct_change()
 
     # Build return lookup: (date, stock) -> return
     return_lookup = {}
